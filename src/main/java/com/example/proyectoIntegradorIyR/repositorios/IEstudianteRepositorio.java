@@ -5,8 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
-public interface IEstudianteReposiotrio extends JpaRepository<Estudiante, Long> {
+public interface IEstudianteRepositorio extends JpaRepository<Estudiante, Integer> {
 
     List<Estudiante> findByPromedio(Double promedio);
-    
+
 }
