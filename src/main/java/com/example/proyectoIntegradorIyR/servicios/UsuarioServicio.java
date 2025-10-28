@@ -1,6 +1,9 @@
 package com.example.proyectoIntegradorIyR.servicios;
 
 import com.example.proyectoIntegradorIyR.ayudas.MensajeError;
+import com.example.proyectoIntegradorIyR.ayudas.Roles;
+import com.example.proyectoIntegradorIyR.excepciones.RecursoNoEncontradoException;
+import com.example.proyectoIntegradorIyR.excepciones.ValidacionException;
 import com.example.proyectoIntegradorIyR.modelos.Usuario;
 import com.example.proyectoIntegradorIyR.modelos.dtos.UsuarioDTO;
 import com.example.proyectoIntegradorIyR.modelos.mapas.IMapaUsuario;
@@ -20,70 +23,85 @@ public class UsuarioServicio {
     @Autowired
     private IMapaUsuario mapa;
 
-    // Crear Usuario
+    // 🔹 Crear usuario
     public UsuarioDTO crearUsuario(Usuario datosUsuario) throws Exception {
         try {
-            return this.mapa.convertir_a_dto(this.repositorio.save(datosUsuario));
+            Optional<Usuario> existente = repositorio.findByCorreo(datosUsuario.getCorreo());
+            if (existente.isPresent()) {
+                throw new ValidacionException("El correo ya está registrado");
+            }
+            return mapa.convertir_a_dto(repositorio.save(datosUsuario));
+        } catch (ValidacionException e) {
+            throw e;
         } catch (Exception error) {
             throw new Exception(MensajeError.ERROR_GENERAL_API.getDescripcion() + error.getMessage());
         }
     }
 
-    // Listar todos los usuarios
+    // 🔹 Listar todos
     public List<UsuarioDTO> listarUsuarios() throws Exception {
         try {
-            return this.mapa.convertir_lista_a_dto(this.repositorio.findAll());
+            return mapa.convertir_lista_a_dto(repositorio.findAll());
         } catch (Exception error) {
             throw new Exception(MensajeError.ERROR_GENERAL_API.getDescripcion() + error.getMessage());
         }
     }
 
-    // Obtener un usuario por ID
+    // 🔹 Obtener por ID
     public UsuarioDTO obtenerPorId(Integer idUsuario) throws Exception {
-        try {
-            Optional<Usuario> usuarioEncontrado = this.repositorio.findById(idUsuario);
-            if (usuarioEncontrado.isPresent()) {
-                return this.mapa.convertir_a_dto(usuarioEncontrado.get());
-            } else {
-                throw new Exception(MensajeError.USUARIO_NO_ENCONTRADO.getDescripcion());
-            }
-        } catch (Exception error) {
-            throw new Exception(MensajeError.ERROR_GENERAL_API.getDescripcion() + error.getMessage());
-        }
+        Usuario usuario = repositorio.findById(idUsuario)
+                .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado con ID: " + idUsuario));
+        return mapa.convertir_a_dto(usuario);
     }
 
-    // Actualizar un usuario
+    // 🔹 HU14 – Actualizar usuario
     public UsuarioDTO actualizarUsuario(Integer id, Usuario datosActualizados) throws Exception {
         try {
-            Optional<Usuario> usuarioExistente = this.repositorio.findById(id);
-            if (usuarioExistente.isPresent()) {
-                Usuario usuario = usuarioExistente.get();
-                usuario.setNombre(datosActualizados.getNombre());
-                usuario.setCorreo(datosActualizados.getCorreo());
-                usuario.setContrasena(datosActualizados.getContrasena());
-                usuario.setRol(datosActualizados.getRol());
-                usuario.setEstado(datosActualizados.getEstado());
-                return this.mapa.convertir_a_dto(this.repositorio.save(usuario));
-            } else {
-                throw new Exception(MensajeError.USUARIO_NO_ENCONTRADO.getDescripcion());
+            Usuario usuarioExistente = repositorio.findById(id)
+                    .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado con ID: " + id));
+
+            Optional<Usuario> usuarioConCorreo = repositorio.findByCorreo(datosActualizados.getCorreo());
+            if (usuarioConCorreo.isPresent() && !usuarioConCorreo.get().getId().equals(id)) {
+                throw new ValidacionException("El correo ya está en uso por otro usuario");
             }
+
+            usuarioExistente.setNombre(datosActualizados.getNombre());
+            usuarioExistente.setCorreo(datosActualizados.getCorreo());
+            usuarioExistente.setContrasena(datosActualizados.getContrasena());
+            usuarioExistente.setRol(datosActualizados.getRol());
+            usuarioExistente.setEstado(datosActualizados.getEstado());
+
+            Usuario actualizado = repositorio.save(usuarioExistente);
+            return mapa.convertir_a_dto(actualizado);
+
+        } catch (RecursoNoEncontradoException | ValidacionException e) {
+            throw e;
         } catch (Exception error) {
             throw new Exception(MensajeError.ERROR_GENERAL_API.getDescripcion() + error.getMessage());
         }
     }
 
-    // Eliminar un usuario
+    // 🔹 HU15 – Eliminar usuario
     public String eliminarUsuario(Integer id) throws Exception {
+        Usuario usuario = repositorio.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No se encontró el usuario con ID: " + id));
+
+        repositorio.delete(usuario);
+        return "Usuario eliminado exitosamente";
+    }
+
+    // 🔹 HU19 – Listar usuarios por rol
+    public List<UsuarioDTO> buscarUsuariosPorRol(Roles rol) throws Exception {
         try {
-            Optional<Usuario> usuarioEncontrado = this.repositorio.findById(id);
-            if (usuarioEncontrado.isPresent()) {
-                this.repositorio.deleteById(id);
-                return "Usuario eliminado exitosamente";
-            } else {
-                throw new Exception(MensajeError.USUARIO_NO_ENCONTRADO.getDescripcion());
+            List<Usuario> usuarios = repositorio.findByRol(rol);
+            if (usuarios.isEmpty()) {
+                throw new RecursoNoEncontradoException("No se encontraron usuarios con el rol: " + rol);
             }
+            return mapa.convertir_lista_a_dto(usuarios);
+        } catch (RecursoNoEncontradoException e) {
+            throw e;
         } catch (Exception error) {
-            throw new Exception(MensajeError.ERROR_GENERAL_API.getDescripcion() + error.getMessage());
+            throw new Exception("Error al buscar usuarios por rol: " + error.getMessage());
         }
     }
 }
